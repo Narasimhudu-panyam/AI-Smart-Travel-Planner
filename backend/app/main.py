@@ -11,7 +11,7 @@ from app.config import Settings, get_settings
 from app.models import ExpenseCreate, ExpenseUpdate, ItineraryUpdate, PlacesResponse, TripPlan, TripRequest, TripUpdate, UploadResponse, UserCreate, UserUpdate
 from app.services.ai import AIServiceError, generate_trip_plan, stream_trip_plan
 from app.services.database import DatabaseError, MongoDatabase, TravelRepository
-from app.services.places import GoogleMapsServiceError, fetch_place_photo, geocode_destination, search_popular_places
+from app.services.places import OpenStreetMapServiceError, fetch_place_photo, geocode_destination, search_popular_places
 from app.services.uploads import upload_to_cloudinary
 from app.services.weather import get_weather
 
@@ -56,9 +56,9 @@ async def ai_service_exception_handler(_: Request, exc: AIServiceError) -> JSONR
     return JSONResponse(status_code=status.HTTP_502_BAD_GATEWAY, content={"detail": str(exc)})
 
 
-@app.exception_handler(GoogleMapsServiceError)
-async def google_maps_exception_handler(_: Request, exc: GoogleMapsServiceError) -> JSONResponse:
-    logger.warning("Google Maps service error: %s", exc)
+@app.exception_handler(OpenStreetMapServiceError)
+async def openstreetmap_exception_handler(_: Request, exc: OpenStreetMapServiceError) -> JSONResponse:
+    logger.warning("OpenStreetMap service error: %s", exc)
     return JSONResponse(status_code=status.HTTP_502_BAD_GATEWAY, content={"detail": str(exc)})
 
 

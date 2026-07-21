@@ -1,6 +1,6 @@
 # AI Smart Travel Planner
 
-A cloud-ready intelligent trip planning system using React, FastAPI, Generative AI, Firebase Authentication, cloud database storage, Cloudinary uploads, Google Maps, and OpenWeather.
+A cloud-ready intelligent trip planning system using React, FastAPI, Generative AI, Firebase Authentication, cloud database storage, Cloudinary uploads, OpenStreetMap, and OpenWeather.
 
 ## Features
 
@@ -10,7 +10,7 @@ A cloud-ready intelligent trip planning system using React, FastAPI, Generative 
 - Optional Cloudinary document/image uploads
 - Optional OpenWeather weather lookup
 - Firebase Authentication-ready frontend
-- Google Maps embed-ready frontend
+- Free OpenStreetMap itinerary map with Nominatim destination search and Overpass attractions
 - Deployment-friendly structure for Vercel and Render
 
 ## Project Structure
@@ -54,9 +54,9 @@ The root npm backend script starts FastAPI with `uvicorn main:app --reload`.
 
 ## Environment
 
-Copy `.env.example` to `.env.local` and add your Firebase and Google Maps keys when ready.
+Copy `.env.example` to `.env.local` and add your Firebase keys when ready.
 
-Copy `backend/.env.example` to `backend/.env` and add keys for Gemini/OpenAI, MongoDB Atlas, Cloudinary, and OpenWeather.
+Copy `backend/.env.example` to `backend/.env` and add keys for Gemini/OpenAI, MongoDB Atlas, Cloudinary, and OpenWeather. OpenStreetMap, Nominatim, and Overpass do not require an API key.
 
 ## Vercel + Render deployment
 
@@ -79,14 +79,13 @@ In Render, set these backend environment variables. `FRONTEND_ORIGIN` is an expl
 FRONTEND_ORIGIN=https://<your-vercel-project>.vercel.app
 MONGODB_URI=...
 GEMINI_API_KEY=...
-GOOGLE_MAPS_API_KEY=...
 ```
 
 The deployed backend uses the health endpoint at `https://<your-render-service>.onrender.com/health` and API routes under `/api`.
 
 For Firebase, add the Vercel domain in **Firebase Console → Authentication → Settings → Authorized domains**. Enable both the Email/Password and Google providers in **Authentication → Sign-in method**. The Vercel deployment does not need Firebase secrets beyond the public `VITE_FIREBASE_*` web configuration values.
 
-The backend uses `GOOGLE_MAPS_API_KEY` exclusively for server-side Geocoding and the Places API (New). In Google Cloud Console, enable **Geocoding API** and **Places API (New)**, attach billing, and ensure the key's API restrictions permit both APIs. Because requests originate from Render, do not restrict this server-side key with browser HTTP-referrer restrictions; use a separately restricted browser key if one is ever needed.
+The backend uses free OpenStreetMap services: Nominatim for destination coordinates and Overpass for nearby places. No Google Maps API key, billing account, or Google Cloud project is required.
 
 ## API Keys
 
@@ -105,4 +104,4 @@ docker compose up --build
 
 ## AWS deployment readiness
 
-The root `Dockerfile` has a `backend` target that reads the standard `PORT` environment variable, making it suitable for an AWS App Runner image deployment. Build and push that target to ECR, then configure App Runner with the required environment variables: `MONGODB_URI`, `GEMINI_API_KEY`, `GOOGLE_MAPS_API_KEY`, `FRONTEND_ORIGIN`, and any optional weather/upload credentials. Deploy the `frontend` target separately (for example, through CloudFront/S3) or keep both services together with Docker Compose on a container platform.
+The root `Dockerfile` has a `backend` target that reads the standard `PORT` environment variable, making it suitable for an AWS App Runner image deployment. Build and push that target to ECR, then configure App Runner with the required environment variables: `MONGODB_URI`, `GEMINI_API_KEY`, `FRONTEND_ORIGIN`, and any optional weather/upload credentials. Deploy the `frontend` target separately (for example, through CloudFront/S3) or keep both services together with Docker Compose on a container platform.

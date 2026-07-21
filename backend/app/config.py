@@ -21,9 +21,6 @@ class Settings(BaseSettings):
 
     openweather_api_key: str | None = None
 
-    # One Maps Platform key is used server-side for Places and Geocoding APIs.
-    google_maps_api_key: str | None = None
-
     cloudinary_cloud_name: str | None = None
     cloudinary_api_key: str | None = None
     cloudinary_api_secret: str | None = None

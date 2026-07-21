@@ -6,7 +6,7 @@ AI Smart Travel Planner is a full-stack travel planning web application. It help
 
 The application combines a React frontend with a FastAPI backend. The frontend collects trip details and displays itinerary results, while the backend handles itinerary generation, attraction search, weather lookup, file uploads, and optional trip history storage.
 
-The project is designed to work in demo mode without external API keys, while also supporting real integrations such as Google Places, Google Maps, OpenWeather, Cloudinary, MongoDB, Firebase, Gemini, and OpenAI when keys are configured.
+The project is designed to work with free OpenStreetMap data for maps and nearby places, alongside OpenWeather, Cloudinary, MongoDB, Firebase, Gemini, and OpenAI when those optional integrations are configured.
 
 ## 2. Main Purpose
 
@@ -33,6 +33,7 @@ The system supports:
 - CSS
 - Lucide React icons
 - Firebase Authentication support
+- Leaflet and OpenStreetMap tiles
 
 ### Backend
 
@@ -46,8 +47,8 @@ The system supports:
 
 ### External Services
 
-- Google Places API for tourist attractions
-- Google Maps Embed API for map display
+- Nominatim for destination geocoding
+- Overpass API for tourist attractions and nearby places
 - OpenWeather API for weather data
 - Gemini API or OpenAI API for AI itinerary generation
 - MongoDB Atlas for trip history
@@ -222,16 +223,14 @@ GET /api/places?destination=Paris
 
 This route fetches popular tourist attractions.
 
-If `GOOGLE_PLACES_API_KEY` is configured, the backend:
+The backend uses free OpenStreetMap services:
 
 1. Geocodes the destination.
-2. Searches nearby tourist attractions.
-3. Performs text search for top attractions.
-4. Uses fallback text searches if Google returns too few results.
-5. Deduplicates and sorts places.
-6. Returns up to 30 attractions.
+2. Uses Overpass to search nearby attractions, beaches, museums, restaurants, parks, viewpoints, historical places, and shopping areas.
+3. Deduplicates and sorts places.
+4. Returns up to 30 attractions.
 
-If no Google Places key is configured, the app returns fallback popular places for common destinations and generic fallback places for unknown destinations. This keeps the UI usable during development.
+No Google key or billing account is required. If Overpass is unavailable, the route returns an empty places list without failing the application.
 
 ### Photo Route
 
@@ -239,7 +238,7 @@ If no Google Places key is configured, the app returns fallback popular places f
 GET /api/places/photo
 ```
 
-Streams Google Places photos when a Google Places API key is available.
+The compatibility endpoint returns an unavailable response because OpenStreetMap does not provide a universal free place-photo service.
 
 ### Upload Route
 
@@ -302,8 +301,8 @@ GET /api/places?destination=<destination>
 ```
 
 5. Backend checks backend cache.
-6. If Google Places key exists, it searches Google Places.
-7. If no key exists, it returns fallback places.
+6. Nominatim resolves the destination and Overpass returns nearby places.
+7. If Overpass is unavailable, it returns an empty list safely.
 8. Frontend displays selectable cards.
 
 ## 11. Currency Handling
@@ -378,8 +377,7 @@ The current app can:
 
 - Run frontend and backend together with one command
 - Generate demo itineraries without AI keys
-- Display fallback popular places without a Google Places key
-- Use Google Places API when a key is added
+- Search OpenStreetMap places without a maps API key
 - Format currency correctly
 - Display maps
 - Upload documents when Cloudinary is configured
@@ -389,7 +387,7 @@ The current app can:
 
 Possible future improvements include:
 
-- Better image fallback for places without Google photos
+- Better image fallback for OpenStreetMap places
 - More fallback attractions for additional cities
 - Real-time exchange rates
 - Drag-and-drop itinerary editing
