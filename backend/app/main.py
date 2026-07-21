@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.config import Settings, get_settings
-from app.models import ExpenseCreate, ExpenseUpdate, ItineraryUpdate, PlacesResponse, TripPlan, TripRequest, TripUpdate, UploadResponse, UserCreate, UserUpdate
+from app.models import ExpenseCreate, ExpenseUpdate, ItineraryUpdate, PlacesResponse, TripPlan, TripRequest, TripUpdate, UploadResponse, UserCreate, UserFavoritesUpdate, UserUpdate
 from app.services.ai import AIServiceError, generate_trip_plan, stream_trip_plan
 from app.services.database import DatabaseError, MongoDatabase, TravelRepository
 from app.services.places import GoogleMapsServiceError, fetch_place_photo, geocode_destination, search_popular_places
@@ -134,6 +134,10 @@ async def upload_document(file: UploadFile = File(...), current_settings: Settin
 async def create_user(payload: UserCreate): return await repository.create_user(payload)
 @app.get("/api/users")
 async def list_users(): return await repository.list_users()
+@app.get("/api/users/profile")
+async def get_user_profile(firebase_uid: str): return await repository.get_user_profile(firebase_uid)
+@app.put("/api/users/profile")
+async def update_user_profile(firebase_uid: str, payload: UserFavoritesUpdate): return await repository.update_user_favorites(firebase_uid, payload)
 @app.get("/api/users/{user_id}")
 async def get_user(user_id: str): return await repository.get_user(user_id)
 @app.patch("/api/users/{user_id}")

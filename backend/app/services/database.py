@@ -14,7 +14,7 @@ from pymongo import ASCENDING, DESCENDING, ReturnDocument
 from pymongo.errors import PyMongoError
 
 from app.config import Settings
-from app.models import ExpenseCreate, ExpenseUpdate, ItineraryUpdate, TripPlan, TripRequest, TripUpdate, UserCreate, UserUpdate
+from app.models import ExpenseCreate, ExpenseUpdate, ItineraryUpdate, TripPlan, TripRequest, TripUpdate, UserCreate, UserFavoritesUpdate, UserUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +103,8 @@ class TravelRepository:
             existing = await self.database.collection("users").find_one(identity_query)
             if existing:
                 updates = {key: value for key, value in document.items() if key not in {"_id", "created_at"} and value is not None}
+                if not updates.get("favorite_destinations") and "favorite_destinations" in existing:
+                    updates.pop("favorite_destinations", None)
                 updated = await self.database.collection("users").find_one_and_update({"_id": existing["_id"]}, {"$set": updates}, return_document=ReturnDocument.AFTER)
                 return _clean(updated)  # type: ignore[return-value]
             await self.database.collection("users").insert_one(document)
@@ -118,6 +120,36 @@ class TravelRepository:
             raise DatabaseError("Could not list users.") from exc
 
     async def get_user(self, user_id: str) -> dict[str, Any]: return await self._one("users", user_id)
+
+    async def get_user_profile(self, firebase_uid: str) -> dict[str, Any]:
+        try:
+            user = await self.database.collection("users").find_one({"firebase_uid": firebase_uid})
+            if user is not None and "favorite_destinations" not in user:
+                user = await self.database.collection("users").find_one_and_update(
+                    {"_id": user["_id"]},
+                    {"$set": {"favorite_destinations": [], "updated_at": _now()}},
+                    return_document=ReturnDocument.AFTER,
+                )
+        except PyMongoError as exc:
+            logger.exception("Could not load user profile for Firebase UID %s", firebase_uid)
+            raise DatabaseError("Could not load user profile.") from exc
+        if user is None:
+            raise KeyError(firebase_uid)
+        return _clean(user)  # type: ignore[return-value]
+
+    async def update_user_favorites(self, firebase_uid: str, payload: UserFavoritesUpdate) -> dict[str, Any]:
+        try:
+            user = await self.database.collection("users").find_one_and_update(
+                {"firebase_uid": firebase_uid},
+                {"$set": {"favorite_destinations": payload.favorite_destinations, "updated_at": _now()}},
+                return_document=ReturnDocument.AFTER,
+            )
+        except PyMongoError as exc:
+            logger.exception("Could not update favorite destinations for Firebase UID %s", firebase_uid)
+            raise DatabaseError("Could not update favorite destinations.") from exc
+        if user is None:
+            raise KeyError(firebase_uid)
+        return _clean(user)  # type: ignore[return-value]
 
     async def update_user(self, user_id: str, payload: UserUpdate) -> dict[str, Any]:
         updates = payload.model_dump(exclude_unset=True, mode="json")

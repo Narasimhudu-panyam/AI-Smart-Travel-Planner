@@ -81,6 +81,27 @@ class UserUpdate(BaseModel):
     favorite_destinations: list[str] | None = None
 
 
+class UserFavoritesUpdate(BaseModel):
+    favorite_destinations: list[str] = Field(default_factory=list)
+
+    @field_validator("favorite_destinations", mode="before")
+    @classmethod
+    def normalize_favorite_destinations(cls, values: list[str] | None) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for value in values or []:
+            if not isinstance(value, str):
+                continue
+            destination = " ".join(value.split())
+            comparison_value = destination.casefold()
+            if destination and comparison_value not in seen:
+                normalized.append(destination)
+                seen.add(comparison_value)
+        if len(normalized) > 10:
+            raise ValueError("A maximum of 10 favorite destinations is allowed.")
+        return normalized
+
+
 class TripUpdate(BaseModel):
     user_id: str | None = None
     destination: str | None = Field(default=None, min_length=2, max_length=120)

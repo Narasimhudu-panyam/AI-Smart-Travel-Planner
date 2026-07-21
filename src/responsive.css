@@ -9,6 +9,24 @@ button, input, select, textarea { max-width: 100%; }
 .trip-row p, .activity p, .plan-hero p { overflow-wrap: anywhere; white-space: normal; }
 .map-box, .map-frame { width: 100%; }
 .map-box iframe, .map-frame iframe { display: block; min-height: 100%; }
+.favorite-destinations { display: grid; gap: 12px; }
+.favorites-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.favorites-heading h3 { margin: 0; }
+.favorites-heading p, .favorites-limit, .favorites-empty { color: var(--muted); font-size: .83rem; margin: 4px 0 0; }
+.favorites-edit { margin-left: auto; padding: 8px 10px; font-size: .8rem; }
+.favorite-chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.favorite-chip { display: inline-flex; align-items: center; gap: 5px; padding: 7px 10px; border: 1px solid var(--green); border-radius: 999px; background: var(--mint); color: var(--green); font-size: .82rem; font-weight: 600; }
+.edit-chip { padding: 3px 4px 3px 10px; }
+.edit-chip input { width: min(150px, 36vw); border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; }
+.edit-chip button { display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 50%; color: var(--green); background: transparent; }
+.edit-chip button:hover { background: color-mix(in srgb, var(--green) 12%, transparent); }
+.favorite-add, .favorite-actions { display: flex; align-items: center; gap: 8px; }
+.favorite-add input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--ink); padding: 10px; outline-color: var(--green); }
+.favorite-add .outline { padding: 9px 10px; font-size: .82rem; }
+.favorite-actions { justify-content: flex-end; }
+.favorites-loading { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: .85rem; }
+.favorites-message { margin: 0; }
+.favorites-toast { width: fit-content; margin: 0; padding: 9px 11px; border-radius: 6px; background: var(--mint); color: var(--green); font-size: .82rem; font-weight: 700; }
 .generate:disabled::after { content: "AI is typing…"; font-size: 0.78rem; font-weight: 600; opacity: 0.9; margin-left: 4px; }
 
 @media (max-width: 1024px) {

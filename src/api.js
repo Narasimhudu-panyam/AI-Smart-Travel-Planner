@@ -67,3 +67,26 @@ export async function uploadDocument(file) {
 
   return response.json();
 }
+
+export async function fetchUserProfile(firebaseUid) {
+  const url = new URL(`${API_BASE_URL}/api/users/profile`, window.location.origin);
+  url.searchParams.set("firebase_uid", firebaseUid);
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Unable to load your profile.");
+  return response.json();
+}
+
+export async function updateFavoriteDestinations(firebaseUid, favoriteDestinations) {
+  const url = new URL(`${API_BASE_URL}/api/users/profile`, window.location.origin);
+  url.searchParams.set("firebase_uid", firebaseUid);
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ favorite_destinations: favoriteDestinations }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || "Unable to update favorite destinations.");
+  }
+  return response.json();
+}
