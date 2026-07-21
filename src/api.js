@@ -1,5 +1,5 @@
 const configuredApiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-const API_BASE_URL = configuredApiBase.startsWith("/") ? "http://localhost:8000" : configuredApiBase.replace(/\/+$/, "");
+const API_BASE_URL = import.meta.env.PROD ? "" : (configuredApiBase.startsWith("/") ? "http://localhost:8000" : configuredApiBase.replace(/\/+$/, ""));
 
 export async function generateTrip(payload) {
   const response = await fetch(`${API_BASE_URL}/api/trips/generate?stream=true`, {
@@ -41,7 +41,7 @@ export async function generateTrip(payload) {
 }
 
 export async function fetchTrips(userId) {
-  const url = new URL(`${API_BASE_URL}/api/trips`);
+  const url = new URL(`${API_BASE_URL}/api/trips`, window.location.origin);
   if (userId) {
     url.searchParams.set("user_id", userId);
   }
