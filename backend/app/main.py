@@ -22,6 +22,18 @@ database = MongoDatabase(settings)
 repository = TravelRepository(database)
 
 
+class DiagnosticCORSMiddleware(CORSMiddleware):
+    """Temporarily log the exact values Starlette compares for preflights."""
+
+    def preflight_response(self, request_headers):
+        logger.info(
+            "CORS preflight comparison: origin=%r allow_origins=%r",
+            request_headers.get("origin"),
+            self.allow_origins,
+        )
+        return super().preflight_response(request_headers)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await database.connect()
@@ -164,7 +176,7 @@ async def delete_expense(expense_id: str): await repository.delete_expense(expen
 # Keep CORS outside FastAPI's ServerErrorMiddleware. This ensures an allowed
 # browser origin also receives CORS headers when an unexpected 500 occurs.
 # The FastAPI instance remains exported as ``app`` for uvicorn app.main:app.
-app.middleware_stack = CORSMiddleware(
+app.middleware_stack = DiagnosticCORSMiddleware(
     app=app.build_middleware_stack(),
     allow_origins=settings.cors_origins,
     allow_credentials=True,
