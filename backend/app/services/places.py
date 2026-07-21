@@ -1,182 +1,130 @@
-"""Free OpenStreetMap services for destination geocoding and nearby places."""
+"""Server-side Google Maps Platform integration for attractions and geocoding."""
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from math import asin, cos, radians, sin, sqrt
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from fastapi import HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.config import Settings
 from app.models import PlaceResult, PlacesResponse
 
 logger = logging.getLogger(__name__)
-_PLACES_CACHE: dict[str, tuple[datetime, PlacesResponse]] = {}
-_GEOCODE_CACHE: dict[str, tuple[datetime, tuple[float, float]]] = {}
+_CACHE: dict[str, tuple[datetime, PlacesResponse]] = {}
 _CACHE_TTL = timedelta(minutes=30)
 _MAX_ATTRACTIONS = 30
-_RADIUS_METERS = 25_000
-_NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-_OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-_OSM_HEADERS = {"User-Agent": "AI-Smart-Travel-Planner/1.0 (OpenStreetMap place search)"}
+_RADIUS_METERS = 50_000.0
 
 
-class OpenStreetMapServiceError(RuntimeError):
-    """Safe error raised when a free OpenStreetMap service cannot respond."""
+class GoogleMapsServiceError(RuntimeError):
+    """Safe failure from Google Maps Platform without leaking the API key."""
 
 
-def _cache_key(destination: str, page_token: str | None = None) -> str:
+def _cache_key(destination: str, page_token: str | None) -> str:
     return f"{' '.join(destination.lower().split())}::{page_token or 'first'}"
 
 
-def _distance_km(origin: tuple[float, float], latitude: float, longitude: float) -> float:
-    d_lat = radians(latitude - origin[0])
-    d_lng = radians(longitude - origin[1])
-    a = sin(d_lat / 2) ** 2 + cos(radians(origin[0])) * cos(radians(latitude)) * sin(d_lng / 2) ** 2
+def _field_mask() -> str:
+    return ("places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,"
+            "places.types,places.primaryTypeDisplayName,places.editorialSummary,places.photos,places.location,"
+            "places.regularOpeningHours,places.googleMapsUri,places.businessStatus")
+
+
+def _headers(api_key: str) -> dict[str, str]:
+    return {"Content-Type": "application/json", "X-Goog-Api-Key": api_key, "X-Goog-FieldMask": _field_mask()}
+
+
+def _distance_km(origin: tuple[float, float], place: dict[str, Any]) -> float | None:
+    location = place.get("location") or {}
+    if location.get("latitude") is None or location.get("longitude") is None:
+        return None
+    d_lat = radians(location["latitude"] - origin[0]); d_lng = radians(location["longitude"] - origin[1])
+    a = sin(d_lat / 2) ** 2 + cos(radians(origin[0])) * cos(radians(location["latitude"])) * sin(d_lng / 2) ** 2
     return 6371 * 2 * asin(sqrt(a))
 
 
-def _format_distance(distance_km: float) -> str:
-    return f"{round(distance_km * 1000)} m from destination center" if distance_km < 1 else f"{distance_km:.1f} km from destination center"
-
-
-def _distance_sort_key(place: PlaceResult) -> float:
-    if not place.distance:
-        return float("inf")
-    value, unit, *_ = place.distance.split()
-    return float(value) / 1000 if unit == "m" else float(value)
-
-
-def _place_category(tags: dict[str, str]) -> str:
-    if tags.get("tourism") == "museum": return "Museum"
-    if tags.get("tourism") == "viewpoint": return "Viewpoint"
-    if tags.get("tourism") in {"attraction", "gallery", "zoo", "theme_park"}: return "Tourist attraction"
-    if tags.get("natural") == "beach": return "Beach"
-    if tags.get("leisure") in {"park", "garden", "nature_reserve"}: return "Park"
-    if tags.get("amenity") in {"restaurant", "cafe", "fast_food", "bar", "pub"}: return "Restaurant"
-    if tags.get("historic"): return "Historical place"
-    if tags.get("shop"): return "Shopping"
-    return "Place of interest"
-
-
-def _address(tags: dict[str, str]) -> str | None:
-    parts = [tags[key] for key in ("addr:housenumber", "addr:street", "addr:suburb", "addr:city") if tags.get(key)]
-    return ", ".join(parts) or None
-
-
-def _coordinates(element: dict[str, Any]) -> tuple[float, float] | None:
-    latitude = element.get("lat")
-    longitude = element.get("lon")
-    if latitude is None or longitude is None:
-        center = element.get("center") or {}
-        latitude, longitude = center.get("lat"), center.get("lon")
-    if latitude is None or longitude is None:
-        return None
-    return float(latitude), float(longitude)
-
-
-def _normalize(element: dict[str, Any], origin: tuple[float, float]) -> PlaceResult | None:
-    tags = element.get("tags") or {}
-    name = tags.get("name")
-    coordinates = _coordinates(element)
-    if not name or coordinates is None:
-        return None
-    latitude, longitude = coordinates
-    element_type, osm_id = element.get("type"), element.get("id")
-    if not element_type or osm_id is None:
-        return None
-    distance = _distance_km(origin, latitude, longitude)
-    description = tags.get("description") or f"{_place_category(tags)} near your destination."
-    return PlaceResult(
-        id=f"{element_type}:{osm_id}",
-        name=name,
-        rating=None,
-        user_reviews_count=None,
-        category=_place_category(tags),
-        description=description,
-        distance=_format_distance(distance),
-        address=_address(tags),
-        image_url=None,
-        photo_name=None,
-        latitude=latitude,
-        longitude=longitude,
-        opening_hours=[tags["opening_hours"]] if tags.get("opening_hours") else [],
-        # Retained solely to preserve the existing API response schema.
-        google_maps_url=f"https://www.openstreetmap.org/{element_type}/{osm_id}",
-    )
+def _normalize(place: dict[str, Any], origin: tuple[float, float]) -> PlaceResult | None:
+    if place.get("businessStatus") == "CLOSED_PERMANENTLY": return None
+    name = place.get("displayName", {}).get("text"); place_id = place.get("id")
+    if not name or not place_id: return None
+    location = place.get("location") or {}; primary = place.get("primaryTypeDisplayName", {}).get("text")
+    types = place.get("types") or []; category = primary or next((x.replace("_", " ").title() for x in types if x not in {"point_of_interest", "establishment"}), "Tourist attraction")
+    photo_name = (place.get("photos") or [{}])[0].get("name")
+    distance = _distance_km(origin, place)
+    return PlaceResult(id=place_id, name=name, rating=place.get("rating"), user_reviews_count=place.get("userRatingCount"), category=category,
+        description=place.get("editorialSummary", {}).get("text") or f"Popular tourist attraction near {place.get('formattedAddress', name)}.",
+        distance=(f"{round(distance * 1000)} m from destination center" if distance is not None and distance < 1 else f"{distance:.1f} km from destination center" if distance is not None else None),
+        address=place.get("formattedAddress"), image_url=f"/api/places/photo?name={quote(photo_name, safe='')}" if photo_name else None,
+        photo_name=photo_name, latitude=location.get("latitude"), longitude=location.get("longitude"),
+        opening_hours=(place.get("regularOpeningHours") or {}).get("weekdayDescriptions") or [], google_maps_url=place.get("googleMapsUri"))
 
 
 async def geocode_destination(destination: str, settings: Settings) -> tuple[float, float]:
-    """Resolve a destination with Nominatim; no API key or billing is required."""
-    key = " ".join(destination.lower().split())
-    cached = _GEOCODE_CACHE.get(key)
-    if cached and cached[0] > datetime.now(timezone.utc):
-        return cached[1]
+    """Convert a user-entered destination into Google Geocoding coordinates."""
+    if not settings.google_maps_api_key:
+        raise GoogleMapsServiceError("Google Maps is not configured. Add GOOGLE_MAPS_API_KEY to backend/.env.")
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0), headers=_OSM_HEADERS) as client:
-            response = await client.get(_NOMINATIM_URL, params={"q": destination, "format": "jsonv2", "limit": 1, "addressdetails": 1})
-            response.raise_for_status()
-            results = response.json()
-    except (httpx.HTTPError, ValueError, KeyError) as exc:
-        logger.warning("Nominatim geocoding failed for %r: %s", destination, exc)
-        raise OpenStreetMapServiceError("Destination search is temporarily unavailable.") from exc
-    if not results:
-        raise OpenStreetMapServiceError("OpenStreetMap could not find that destination.")
-    coordinates = (float(results[0]["lat"]), float(results[0]["lon"]))
-    _GEOCODE_CACHE[key] = (datetime.now(timezone.utc) + _CACHE_TTL, coordinates)
-    return coordinates
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.get("https://maps.googleapis.com/maps/api/geocode/json", params={"address": destination, "key": settings.google_maps_api_key})
+            response.raise_for_status(); data = response.json()
+    except httpx.HTTPError as exc:
+        logger.exception("Google Geocoding request failed.")
+        raise GoogleMapsServiceError("Google Geocoding is unavailable. Please try again.") from exc
+    if data.get("status") in {"REQUEST_DENIED", "OVER_DAILY_LIMIT"}:
+        logger.warning("Google Geocoding denied request: %s", data.get("status"))
+        raise GoogleMapsServiceError("Google Maps rejected the configured API key or quota.")
+    location = ((data.get("results") or [{}])[0].get("geometry") or {}).get("location")
+    if not location: raise GoogleMapsServiceError("Google Maps could not find that destination.")
+    return float(location["lat"]), float(location["lng"])
 
 
-def _overpass_query(latitude: float, longitude: float) -> str:
-    return f"""
-    [out:json][timeout:15];
-    (
-      nwr["tourism"~"attraction|museum|gallery|viewpoint|zoo|theme_park"](around:{_RADIUS_METERS},{latitude},{longitude});
-      nwr["natural"="beach"](around:{_RADIUS_METERS},{latitude},{longitude});
-      nwr["leisure"~"park|garden|nature_reserve"](around:{_RADIUS_METERS},{latitude},{longitude});
-      nwr["amenity"~"restaurant|cafe|fast_food|bar|pub"](around:{_RADIUS_METERS},{latitude},{longitude});
-      nwr["historic"](around:{_RADIUS_METERS},{latitude},{longitude});
-      nwr["shop"~"mall|department_store|marketplace|boutique"](around:{_RADIUS_METERS},{latitude},{longitude});
-    );
-    out center tags;
-    """
+async def _places_search(client: httpx.AsyncClient, api_key: str, destination: str, center: tuple[float, float]) -> list[dict[str, Any]]:
+    nearby = {"includedTypes": ["tourist_attraction"], "maxResultCount": 20, "rankPreference": "POPULARITY", "locationRestriction": {"circle": {"center": {"latitude": center[0], "longitude": center[1]}, "radius": _RADIUS_METERS}}}
+    text = {"textQuery": f"top tourist attractions in {destination}", "maxResultCount": 20, "locationBias": {"circle": {"center": {"latitude": center[0], "longitude": center[1]}, "radius": _RADIUS_METERS}}}
+    first = await client.post("https://places.googleapis.com/v1/places:searchNearby", headers=_headers(api_key), json=nearby); first.raise_for_status()
+    second = await client.post("https://places.googleapis.com/v1/places:searchText", headers=_headers(api_key), json=text); second.raise_for_status()
+    return first.json().get("places", []) + second.json().get("places", [])
 
 
 async def search_popular_places(destination: str, page_token: str | None, settings: Settings) -> PlacesResponse:
-    """Return an API-compatible places payload from Nominatim and Overpass."""
     destination = destination.strip()
-    if not destination:
-        return PlacesResponse(places=[], next_page_token=None, source="empty")
-    key = _cache_key(destination, page_token)
-    cached = _PLACES_CACHE.get(key)
-    if cached and cached[0] > datetime.now(timezone.utc):
-        return cached[1]
+    if not destination: return PlacesResponse(places=[], next_page_token=None, source="empty")
+    key = _cache_key(destination, page_token); cached = _CACHE.get(key)
+    if cached and cached[0] > datetime.now(timezone.utc): return cached[1]
+    if not settings.google_maps_api_key:
+        raise GoogleMapsServiceError("Google Places is not configured. Add GOOGLE_MAPS_API_KEY to backend/.env.")
+    center = await geocode_destination(destination, settings)
     try:
-        center = await geocode_destination(destination, settings)
-    except OpenStreetMapServiceError as exc:
-        logger.warning("Unable to geocode %r for place search: %s", destination, exc)
-        return PlacesResponse(places=[], next_page_token=None, source="openstreetmap", destination_coordinates=None)
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0), headers=_OSM_HEADERS) as client:
-            response = await client.post(_OVERPASS_URL, data={"data": _overpass_query(*center)})
-            response.raise_for_status()
-            elements = response.json().get("elements", [])
-    except (httpx.HTTPError, ValueError) as exc:
-        logger.warning("Overpass place search failed for %r: %s", destination, exc)
-        return PlacesResponse(places=[], next_page_token=None, source="openstreetmap", destination_coordinates={"lat": center[0], "lng": center[1]})
+        async with httpx.AsyncClient(timeout=25) as client:
+            raw_places = await _places_search(client, settings.google_maps_api_key, destination, center)
+    except httpx.HTTPStatusError as exc:
+        logger.warning("Google Places rejected request with HTTP %s", exc.response.status_code)
+        raise GoogleMapsServiceError("Google Places rejected the configured API key or quota.") from exc
+    except httpx.HTTPError as exc:
+        logger.exception("Google Places request failed.")
+        raise GoogleMapsServiceError("Google Places is unavailable. Please try again.") from exc
     unique: dict[str, PlaceResult] = {}
-    for element in elements:
-        place = _normalize(element, center)
-        if place:
-            unique.setdefault(place.id, place)
-    places = sorted(unique.values(), key=_distance_sort_key)[:_MAX_ATTRACTIONS]
-    result = PlacesResponse(places=places, next_page_token=None, source="openstreetmap", destination_coordinates={"lat": center[0], "lng": center[1]})
-    _PLACES_CACHE[key] = (datetime.now(timezone.utc) + _CACHE_TTL, result)
+    for raw in raw_places:
+        place = _normalize(raw, center)
+        if place: unique.setdefault(place.id, place)
+    places = sorted(unique.values(), key=lambda item: (item.rating or 0, item.user_reviews_count or 0), reverse=True)[:_MAX_ATTRACTIONS]
+    result = PlacesResponse(places=places, next_page_token=None, source="google_places", destination_coordinates={"lat": center[0], "lng": center[1]})
+    _CACHE[key] = (datetime.now(timezone.utc) + _CACHE_TTL, result)
     return result
 
 
-async def fetch_place_photo(name: str, settings: Settings):
-    """Preserve the existing endpoint without depending on a proprietary photo API."""
-    raise HTTPException(status_code=404, detail="Place photo unavailable.")
+async def fetch_place_photo(name: str, settings: Settings) -> StreamingResponse:
+    if not settings.google_maps_api_key: raise HTTPException(status_code=503, detail="Google Places is not configured.")
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+            response = await client.get(f"https://places.googleapis.com/v1/{name}/media", params={"maxWidthPx": 640, "maxHeightPx": 420, "key": settings.google_maps_api_key})
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=404, detail="Place photo unavailable.") from exc
+    return StreamingResponse(BytesIO(response.content), media_type=response.headers.get("content-type", "image/jpeg"))

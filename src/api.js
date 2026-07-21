@@ -67,11 +67,3 @@ export async function uploadDocument(file) {
 
   return response.json();
 }
-
-export async function geocodeDestination(destination) {
-  const url = new URL(`${API_BASE_URL}/api/geocode`, window.location.origin);
-  url.searchParams.set("destination", destination);
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("Unable to locate destination.");
-  return response.json();
-}
