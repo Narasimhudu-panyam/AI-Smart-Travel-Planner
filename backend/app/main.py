@@ -172,3 +172,4 @@ app.middleware_stack = CORSMiddleware(
     allow_headers=["*"],
 )
 logger.info("CORS allowlist configured for: %s", settings.cors_origins)
+logger.info("FastAPI routes loaded: %s", [route.path for route in app.routes])
