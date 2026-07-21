@@ -1,0 +1,32 @@
+{
+  "name": "ai-smart-travel-planner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k --names frontend,backend --prefix-colors cyan,magenta \"npm run frontend\" \"npm run backend\"",
+    "start": "npm run dev",
+    "frontend": "vite --host localhost --port 5173 --open http://localhost:5173",
+    "backend": "cd backend && .venv\\Scripts\\uvicorn.exe main:app --reload --host localhost --port 8000",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "firebase": "^12.0.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.18.1",
+    "vite": "^7.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3",
+    "eslint": "^9.0.0",
+    "eslint-plugin-react": "^7.37.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.0",
+    "globals": "^15.0.0"
+  }
+}

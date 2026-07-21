@@ -1,0 +1,74 @@
+/* Layout-only responsive refinements. Existing visual theme and interactions remain unchanged. */
+html, body, #root { min-width: 320px; overflow-x: hidden; }
+img, iframe { max-width: 100%; }
+button, input, select, textarea { max-width: 100%; }
+
+.app-page, .section, .auth-card { width: min(100%, 1240px); }
+.form-card, .dashboard-card, .details-side section, .history-page, .profile-card { min-width: 0; }
+.trip-row > div, .activity > div, .card-title, .page-heading > div { min-width: 0; }
+.trip-row p, .activity p, .plan-hero p { overflow-wrap: anywhere; white-space: normal; }
+.map-box, .map-frame { width: 100%; }
+.map-box iframe, .map-frame iframe { display: block; min-height: 100%; }
+.generate:disabled::after { content: "AI is typing…"; font-size: 0.78rem; font-weight: 600; opacity: 0.9; margin-left: 4px; }
+
+@media (max-width: 1024px) {
+  .nav { padding-inline: 24px; }
+  .hero { gap: 36px; padding-inline: 6vw; }
+  .hero-card { max-width: 420px; }
+  .app-page { padding-inline: 24px; }
+  .trip-builder { grid-template-columns: minmax(0, 1fr) 310px; }
+  .itinerary-layout { grid-template-columns: minmax(0, 1fr) 300px; }
+  .destination-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 800px) {
+  .nav { padding-inline: 18px; }
+  .nav nav.open { max-height: calc(100vh - 64px); overflow-y: auto; }
+  .nav nav .button, .nav nav a, .nav nav button { min-height: 42px; }
+  .hero { min-height: auto; padding: 54px 22px; gap: 32px; }
+  .hero-content, .hero-card { max-width: none; width: 100%; }
+  .hero-card { height: 330px; }
+  .section { padding-inline: 22px; }
+  .feature-grid, .stats-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .trip-builder, .itinerary-layout { grid-template-columns: 1fr; }
+  .builder-aside { min-height: 245px; }
+  .details-side { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .page-heading, .trip-summary { gap: 16px; }
+  .page-heading .button, .trip-actions { width: 100%; }
+  .trip-actions button { flex: 1; justify-content: center; }
+  .form-card { padding: 22px; }
+  .map-box { height: clamp(220px, 50vw, 320px); }
+}
+
+@media (max-width: 560px) {
+  h1 { font-size: clamp(2.15rem, 11vw, 3rem); }
+  h2 { font-size: clamp(1.75rem, 8vw, 2.3rem); }
+  .app-page { padding: 34px 16px 64px; }
+  .section { padding: 56px 16px; }
+  .hero { padding: 44px 16px; }
+  .hero-copy { font-size: 1rem; }
+  .hero-actions, .hero-proof { align-items: flex-start; }
+  .hero-actions { gap: 16px; }
+  .hero-actions .button { width: 100%; }
+  .hero-card { height: 285px; padding: 18px; }
+  .hero-destination h2 { font-size: 2.55rem; }
+  .logos { gap: 16px; padding: 18px 16px; }
+  .feature-grid, .stats-cards, .destination-grid, .details-side, .form-grid { grid-template-columns: 1fr; }
+  .destination { height: 215px; }
+  .dashboard-card, .form-card { padding: 18px; }
+  .stat-card { padding: 16px; }
+  .choice-row { gap: 7px; }
+  .choice-row button { min-height: 38px; padding: 8px 10px; }
+  .places-controls input { width: 100%; }
+  .places-controls .controls { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+  .places-controls .controls button:last-child { grid-column: 1 / -1; }
+  .generate, .auth-form .button { min-height: 50px; }
+  .day-plan { gap: 10px; padding: 18px 0; }
+  .activity { grid-template-columns: 52px minmax(0, 1fr); gap: 8px; }
+  .activity:not(:last-child):before { left: 25px; }
+  .trip-meta { gap: 10px 16px; }
+  .trip-actions { flex-direction: column; }
+  .profile-card { align-items: flex-start; flex-wrap: wrap; padding: 18px; }
+  .profile-card .outline { margin-left: 0; width: 100%; justify-content: center; }
+  footer { padding: 38px 18px; }
+}

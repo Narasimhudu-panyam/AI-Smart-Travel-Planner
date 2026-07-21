@@ -1,0 +1,22 @@
+.places-controls .controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.places-controls .controls button {
+  border: 1px solid var(--line, #dfe4da);
+  border-radius: 7px;
+  background: var(--card, #fff);
+  color: var(--ink, #1e302d);
+  padding: 9px 11px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.places-controls .controls button:hover {
+  border-color: var(--green, #155e52);
+  background: var(--mint, #dceee3);
+  color: var(--green, #155e52);
+}
