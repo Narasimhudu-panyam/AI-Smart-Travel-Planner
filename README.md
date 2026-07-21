@@ -58,6 +58,36 @@ Copy `.env.example` to `.env.local` and add your Firebase and Google Maps keys w
 
 Copy `backend/.env.example` to `backend/.env` and add keys for Gemini/OpenAI, MongoDB Atlas, Cloudinary, and OpenWeather.
 
+## Vercel + Render deployment
+
+In Vercel, set the following **Production** environment variables before rebuilding the frontend:
+
+```text
+VITE_API_BASE_URL=https://<your-render-service>.onrender.com
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+VITE_FIREBASE_MEASUREMENT_ID=...
+```
+
+In Render, set these backend environment variables. `FRONTEND_ORIGIN` is an explicit comma-separated CORS allowlist; use the real Vercel domain, not a wildcard.
+
+```text
+FRONTEND_ORIGIN=https://<your-vercel-project>.vercel.app
+MONGODB_URI=...
+GEMINI_API_KEY=...
+GOOGLE_MAPS_API_KEY=...
+```
+
+The deployed backend uses the health endpoint at `https://<your-render-service>.onrender.com/health` and API routes under `/api`.
+
+For Firebase, add the Vercel domain in **Firebase Console → Authentication → Settings → Authorized domains**. Enable both the Email/Password and Google providers in **Authentication → Sign-in method**. The Vercel deployment does not need Firebase secrets beyond the public `VITE_FIREBASE_*` web configuration values.
+
+The backend uses `GOOGLE_MAPS_API_KEY` exclusively for server-side Geocoding and the Places API (New). In Google Cloud Console, enable **Geocoding API** and **Places API (New)**, attach billing, and ensure the key's API restrictions permit both APIs. Because requests originate from Render, do not restrict this server-side key with browser HTTP-referrer restrictions; use a separately restricted browser key if one is ever needed.
+
 ## API Keys
 
 The app works without keys using demo data. Add real keys to enable live AI, weather, database history, maps, and uploads.
