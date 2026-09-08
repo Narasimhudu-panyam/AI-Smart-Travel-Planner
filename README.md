@@ -1,6 +1,14 @@
-# AI Smart Travel Planner
+# ✈️ AI Smart Travel Planner
 
-A cloud-ready intelligent trip planning system using React, FastAPI, Generative AI, Firebase Authentication, cloud database storage, Cloudinary uploads, Google Maps, and OpenWeather.
+An AI-powered travel planning application that generates personalized travel itineraries based on destination, budget, travel duration, and preferences using Google Gemini AI.
+
+## 🌐 Live Demo
+
+Frontend:
+https://ai-smart-travel-planner-five.vercel.app
+
+Backend API:
+https://ai-smart-travel-planner-1ji3.onrender.com
 
 ## Features
 
@@ -102,7 +110,3 @@ docker compose up --build
 
 - Frontend: `http://localhost:5173`
 - Backend health check: `http://localhost:8000/health`
-
-## AWS deployment readiness
-
-The root `Dockerfile` has a `backend` target that reads the standard `PORT` environment variable, making it suitable for an AWS App Runner image deployment. Build and push that target to ECR, then configure App Runner with the required environment variables: `MONGODB_URI`, `GEMINI_API_KEY`, `GOOGLE_MAPS_API_KEY`, `FRONTEND_ORIGIN`, and any optional weather/upload credentials. Deploy the `frontend` target separately (for example, through CloudFront/S3) or keep both services together with Docker Compose on a container platform.
