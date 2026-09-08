@@ -51,19 +51,39 @@ class ItineraryDay(BaseModel):
     activities: list[ItineraryActivity]
 
 
+class BudgetAnalysis(BaseModel):
+    requested_budget: float
+    estimated_cost: float
+    difference: float
+    budget_status: str = "within_budget"  # "within_budget", "tight_budget", "exceeds_budget"
+    advice: str | None = None
+    cost_saving_tips: list[str] = Field(default_factory=list)
+
+
 class TripPlan(BaseModel):
     id: str | None = None
     destination: str
     summary: str
     currency: str = "USD"
-    budget_breakdown: dict[str, float]
-    weather: dict[str, str | float | None]
+    start_date: str | None = None
+    end_date: str | None = None
+    duration_days: int | None = None
+    travelers: int = 1
+    travel_style: str = "balanced"
+    budget: float | None = None
+    budget_breakdown: dict[str, float] = Field(default_factory=dict)
+    budget_analysis: BudgetAnalysis | None = None
+    weather: dict[str, str | float | None] = Field(default_factory=dict)
     itinerary: list[ItineraryDay]
-    packing_tips: list[str]
-    local_tips: list[str]
+    food_recommendations: list[str] = Field(default_factory=list)
+    transport_suggestions: list[str] = Field(default_factory=list)
+    accommodation_suggestions: list[str] = Field(default_factory=list)
+    packing_tips: list[str] = Field(default_factory=list)
+    local_tips: list[str] = Field(default_factory=list)
     map_query: str
     ai_provider: str
     selected_attractions: list[SelectedAttraction] = Field(default_factory=list)
+
 
 
 class UserCreate(BaseModel):

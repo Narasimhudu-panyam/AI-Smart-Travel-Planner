@@ -21,20 +21,21 @@ async function searchPlaces(destination, pageToken = null) {
   }
 
   const url = new URL(`${API_BASE}/api/places`, window.location.origin);
-  url.searchParams.set("destination", destination);
+  url.searchParams.set("destination", destination.trim());
   if (pageToken) url.searchParams.set("page_token", pageToken);
 
   try {
     const res = await fetch(url.toString());
     if (!res.ok) {
-      const error = await res.json().catch(() => ({}));
-      throw new Error(error.detail || "Unable to load popular places.");
+      const errorData = await res.json().catch(() => ({}));
+      const msg = errorData.detail || `Server returned HTTP ${res.status}`;
+      return { places: [], next_page_token: null, source: "unavailable", message: msg };
     }
     const data = await res.json();
     _cache.set(key, { expires: Date.now() + TTL_MS, data });
     return data;
-  } catch {
-    return { places: [], next_page_token: null, source: "error" };
+  } catch (err) {
+    return { places: [], next_page_token: null, source: "error", message: err.message || "Network error loading places." };
   }
 }
 

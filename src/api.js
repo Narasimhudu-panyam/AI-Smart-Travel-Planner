@@ -2,42 +2,71 @@ const configuredApiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost
 const API_BASE_URL = import.meta.env.PROD ? "" : (configuredApiBase.startsWith("/") ? "http://localhost:8000" : configuredApiBase.replace(/\/+$/, ""));
 
 export async function generateTrip(payload) {
-  const response = await fetch(`${API_BASE_URL}/api/trips/generate?stream=true`, {
+  // First attempt streaming generation
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/trips/generate?stream=true`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.ok) {
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("text/event-stream") || !response.body) {
+        return await response.json();
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let plan = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+
+        for (const event of events) {
+          const name = event.match(/^event:\s*(.+)$/m)?.[1]?.trim();
+          const dataMatch = event.match(/^data:\s*([\s\S]+)$/m)?.[1]?.trim();
+          if (!dataMatch) continue;
+
+          try {
+            const parsedData = JSON.parse(dataMatch);
+            if (name === "delta") {
+              window.dispatchEvent(new CustomEvent("travel-ai-delta", { detail: parsedData }));
+            }
+            if (name === "final") {
+              plan = parsedData;
+            }
+          } catch {
+            // Ignore malformed partial chunks
+          }
+        }
+
+        if (done) break;
+      }
+
+      if (plan) return plan;
+    }
+  } catch (streamErr) {
+    console.warn("Streaming generation encountered an issue, falling back to direct generation:", streamErr);
+  }
+
+  // Resilient non-streaming fallback
+  const fallbackResponse = await fetch(`${API_BASE_URL}/api/trips/generate?stream=false`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || "Unable to generate trip.");
+  if (!fallbackResponse.ok) {
+    const error = await fallbackResponse.json().catch(() => ({}));
+    throw new Error(error.detail || "Unable to generate itinerary. Please try again.");
   }
 
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.includes("text/event-stream") || !response.body) {
-    return response.json();
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let plan = null;
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const events = buffer.split("\n\n");
-    buffer = events.pop() || "";
-    for (const event of events) {
-      const name = event.match(/^event: (.+)$/m)?.[1];
-      const data = event.match(/^data: (.+)$/m)?.[1];
-      if (!data) continue;
-      if (name === "delta") window.dispatchEvent(new CustomEvent("travel-ai-delta", { detail: JSON.parse(data) }));
-      if (name === "final") plan = JSON.parse(data);
-    }
-    if (done) break;
-  }
-  if (!plan) throw new Error("The itinerary stream ended before a final plan was returned.");
-  return plan;
+  return await fallbackResponse.json();
 }
 
 export async function fetchTrips(userId) {

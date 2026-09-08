@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { searchPlaces } from "./placesService";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles, MapPin } from "lucide-react";
 import "./places.css";
 
 function SkeletonCard() {
@@ -36,7 +36,8 @@ export default function PopularPlaces({ destination, selected = [], onChange }) 
   const [loading, setLoading] = useState(false);
   const [places, setPlaces] = useState([]);
   const [nextPageToken, setNextPageToken] = useState(null);
-  const [error, setError] = useState(null);
+  const [statusSource, setStatusSource] = useState(null);
+  const [statusMessage, setStatusMessage] = useState(null);
   const [query, setQuery] = useState("");
   const [sortByRating, setSortByRating] = useState(false);
   const onChangeRef = useRef(onChange);
@@ -48,28 +49,50 @@ export default function PopularPlaces({ destination, selected = [], onChange }) 
   useEffect(() => {
     let mounted = true;
     async function load() {
+      if (!destination || !destination.trim()) {
+        setPlaces([]);
+        setStatusSource("empty");
+        setStatusMessage(null);
+        return;
+      }
+
       setLoading(true);
-      setError(null);
       setPlaces([]);
       setNextPageToken(null);
+      setStatusSource(null);
+      setStatusMessage(null);
+
       try {
-        const res = await searchPlaces(destination || "");
+        const res = await searchPlaces(destination);
         if (!mounted) return;
-        const places = res.places || [];
-        setPlaces(places);
+        const placeList = res.places || [];
+        setPlaces(placeList);
         setNextPageToken(res.next_page_token || null);
+        setStatusSource(res.source || null);
+        setStatusMessage(res.message || null);
         
-        if (places.length > 0) {
-          onChangeRef.current(places.map(toSelectedAttraction));
+        if (placeList.length > 0) {
+          onChangeRef.current(placeList.map(toSelectedAttraction));
+        } else {
+          onChangeRef.current([]);
         }
       } catch (err) {
-        setError(err.message || "Unable to fetch popular places.");
+        if (!mounted) return;
+        setStatusSource("error");
+        setStatusMessage(err.message || "Unable to fetch popular places.");
       } finally {
         if (mounted) setLoading(false);
       }
     }
-    load();
-    return () => (mounted = false);
+
+    const timer = setTimeout(() => {
+      load();
+    }, 300);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+    };
   }, [destination]);
 
   async function loadMore() {
@@ -79,8 +102,8 @@ export default function PopularPlaces({ destination, selected = [], onChange }) 
       const res = await searchPlaces(destination, nextPageToken);
       setPlaces((p) => [...p, ...(res.places || [])]);
       setNextPageToken(res.next_page_token || null);
-    } catch (err) {
-      setError(err.message || "Unable to load more places.");
+    } catch {
+      // Ignore pagination error
     } finally {
       setLoading(false);
     }
@@ -124,26 +147,36 @@ export default function PopularPlaces({ destination, selected = [], onChange }) 
     return list;
   }, [places, query, sortByRating]);
 
-  const emptyMessage = "No popular places found for this destination.";
+  const showFallbackNotice = ["maps_not_configured", "unavailable", "error", "google_places_unavailable"].includes(statusSource);
 
   return (
     <div className="popular-places">
       <div className="panel-heading">
-        <h3>Popular Places to Visit</h3>
+        <h3>
+          <MapPin size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />
+          Popular Places to Visit
+        </h3>
+        {places.length > 0 && (
+          <span className="places-count-badge">
+            {selected.length} of {places.length} selected
+          </span>
+        )}
       </div>
 
-      <div className="places-controls">
-        <input
-          placeholder="Search places"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <div className="controls">
-          <button type="button" onClick={selectAllVisible}>Select all</button>
-          <button type="button" onClick={clearAllVisible}>Unselect visible</button>
-          <button type="button" onClick={() => setSortByRating((s) => !s)}>{sortByRating ? "Unsort" : "Sort by rating"}</button>
+      {places.length > 0 && (
+        <div className="places-controls">
+          <input
+            placeholder="Search discovered places..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <div className="controls">
+            <button type="button" onClick={selectAllVisible}>Select all</button>
+            <button type="button" onClick={clearAllVisible}>Unselect visible</button>
+            <button type="button" onClick={() => setSortByRating((s) => !s)}>{sortByRating ? "Unsort" : "Sort by rating"}</button>
+          </div>
         </div>
-      </div>
+      )}
 
       {loading && places.length === 0 ? (
         <div className="places-grid">
@@ -152,10 +185,36 @@ export default function PopularPlaces({ destination, selected = [], onChange }) 
           <SkeletonCard />
           <SkeletonCard />
         </div>
-      ) : error ? (
-        <p className="muted">{error}</p>
+      ) : showFallbackNotice ? (
+        <div className="places-assistant-card" style={{ padding: "16px", borderRadius: "12px", background: "rgba(99, 102, 241, 0.08)", border: "1px dashed rgba(99, 102, 241, 0.3)", marginTop: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+            <Sparkles size={20} style={{ color: "#6366f1", flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <strong style={{ display: "block", marginBottom: 4, color: "var(--text-primary, #1e293b)" }}>
+                AI Destination Discovery Active
+              </strong>
+              <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--text-muted, #64748b)", lineHeight: 1.5 }}>
+                {destination
+                  ? `Our AI Assistant will dynamically discover, prioritize, and include signature attractions and authentic spots in ${destination} for you.`
+                  : "Enter any destination to see popular highlights, or let the AI Assistant plan them automatically."}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : filteredPlaces.length === 0 && places.length > 0 ? (
+        <p className="muted" style={{ padding: "12px 0" }}>No places matched your search filter.</p>
       ) : filteredPlaces.length === 0 ? (
-        <p className="muted">{emptyMessage}</p>
+        <div className="places-assistant-card" style={{ padding: "16px", borderRadius: "12px", background: "rgba(99, 102, 241, 0.08)", border: "1px dashed rgba(99, 102, 241, 0.3)", marginTop: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+            <Sparkles size={20} style={{ color: "#6366f1", flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <strong style={{ display: "block", marginBottom: 4 }}>AI Assistant Ready</strong>
+              <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--text-muted, #64748b)" }}>
+                No specific places selected. The AI Assistant will curate the best activities, landmarks, and restaurants for your travel style.
+              </p>
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="places-grid">
           {filteredPlaces.map((place) => (

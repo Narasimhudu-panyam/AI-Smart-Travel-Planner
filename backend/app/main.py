@@ -1,5 +1,5 @@
-import logging
 import json
+import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -8,10 +8,33 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.config import Settings, get_settings
-from app.models import ExpenseCreate, ExpenseUpdate, ItineraryUpdate, PlacesResponse, TripPlan, TripRequest, TripUpdate, UploadResponse, UserCreate, UserFavoritesUpdate, UserUpdate
-from app.services.ai import AIServiceError, generate_trip_plan, stream_trip_plan
+from app.models import (
+    ExpenseCreate,
+    ExpenseUpdate,
+    ItineraryUpdate,
+    PlacesResponse,
+    TripPlan,
+    TripRequest,
+    TripUpdate,
+    UploadResponse,
+    UserCreate,
+    UserFavoritesUpdate,
+    UserUpdate,
+)
+from app.services.ai import (
+    AIServiceError,
+    _extract_json,
+    _generate_intelligent_fallback_plan,
+    generate_trip_plan,
+    stream_trip_plan,
+)
 from app.services.database import DatabaseError, MongoDatabase, TravelRepository
-from app.services.places import GoogleMapsServiceError, fetch_place_photo, geocode_destination, search_popular_places
+from app.services.places import (
+    GoogleMapsServiceError,
+    fetch_place_photo,
+    geocode_destination,
+    search_popular_places,
+)
 from app.services.uploads import upload_to_cloudinary
 from app.services.weather import get_weather
 
@@ -74,29 +97,67 @@ async def health() -> dict[str, str]:
 
 # Existing frontend endpoints (preserved)
 @app.post("/api/trips/generate", response_model=TripPlan)
-async def create_trip(request: TripRequest, stream: bool = False, current_settings: Settings = Depends(get_settings)) -> TripPlan | StreamingResponse:
+async def create_trip(
+    request: TripRequest,
+    stream: bool = False,
+    current_settings: Settings = Depends(get_settings),
+) -> TripPlan | StreamingResponse:
     if request.end_date < request.start_date:
         raise HTTPException(status_code=422, detail="End date must be on or after start date.")
+
     weather = await get_weather(request.destination, current_settings)
+
     if stream:
         async def event_stream():
             chunks: list[str] = []
             try:
-                async for chunk in stream_trip_plan(request, weather, current_settings):
-                    chunks.append(chunk)
-                    yield f"event: delta\ndata: {json.dumps({'text': chunk})}\n\n"
-                payload = json.loads("".join(chunks))
-                payload["currency"] = request.currency
-                payload.setdefault("selected_attractions", [item.model_dump(mode="json") for item in request.selected_attractions])
-                plan = TripPlan(**payload, weather=weather, ai_provider="gemini")
-            except Exception as exc:
-                logger.warning("Streaming itinerary generation fell back to standard generation: %s", exc)
-                plan = await generate_trip_plan(request, weather, current_settings)
-            saved_plan = await repository.save_generated_trip(request, plan)
-            yield f"event: final\ndata: {saved_plan.model_dump_json()}\n\n"
-        return StreamingResponse(event_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+                try:
+                    async for chunk in stream_trip_plan(request, weather, current_settings):
+                        chunks.append(chunk)
+                        yield f"event: delta\ndata: {json.dumps({'text': chunk})}\n\n"
+
+                    full_text = "".join(chunks)
+                    payload = _extract_json(full_text)
+                    payload["destination"] = payload.get("destination") or request.destination
+                    payload["currency"] = request.currency
+                    payload["start_date"] = str(request.start_date)
+                    payload["end_date"] = str(request.end_date)
+                    payload["duration_days"] = max((request.end_date - request.start_date).days + 1, 1)
+                    payload["travelers"] = request.travelers
+                    payload["travel_style"] = request.travel_style
+                    payload["budget"] = request.budget
+                    payload.setdefault("selected_attractions", [item.model_dump(mode="json") for item in request.selected_attractions])
+                    payload.setdefault("weather", weather)
+                    payload.setdefault("map_query", request.destination)
+                    plan = TripPlan(**payload, ai_provider="gemini")
+                except Exception as exc:
+                    logger.warning("Streaming itinerary generation fell back to standard generator: %s", exc)
+                    plan = await generate_trip_plan(request, weather, current_settings)
+
+                try:
+                    saved_plan = await repository.save_generated_trip(request, plan)
+                except Exception as db_exc:
+                    logger.warning("Could not persist generated trip to database: %s", db_exc)
+                    saved_plan = plan
+
+                yield f"event: final\ndata: {saved_plan.model_dump_json()}\n\n"
+            except Exception as outer_exc:
+                logger.exception("Fatal error in event stream: %s", outer_exc)
+                fallback_plan = _generate_intelligent_fallback_plan(request, weather)
+                yield f"event: final\ndata: {fallback_plan.model_dump_json()}\n\n"
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
     plan = await generate_trip_plan(request, weather, current_settings)
-    return await repository.save_generated_trip(request, plan)
+    try:
+        return await repository.save_generated_trip(request, plan)
+    except Exception as db_exc:
+        logger.warning("Could not persist generated trip to database: %s", db_exc)
+        return plan
 
 
 @app.get("/api/trips")
@@ -120,8 +181,10 @@ async def place_photo(name: str, current_settings: Settings = Depends(get_settin
 
 @app.get("/api/geocode")
 async def geocode(destination: str, current_settings: Settings = Depends(get_settings)):
-    latitude, longitude = await geocode_destination(destination, current_settings)
-    return {"destination": destination, "latitude": latitude, "longitude": longitude}
+    coords = await geocode_destination(destination, current_settings)
+    if coords:
+        return {"destination": destination, "latitude": coords[0], "longitude": coords[1]}
+    return {"destination": destination, "latitude": None, "longitude": None}
 
 
 @app.post("/api/uploads", response_model=UploadResponse)
