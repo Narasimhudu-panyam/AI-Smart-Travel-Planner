@@ -1,5 +1,5 @@
-const configuredApiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-const API_BASE_URL = import.meta.env.PROD ? "" : (configuredApiBase.startsWith("/") ? "http://localhost:8000" : configuredApiBase.replace(/\/+$/, ""));
+const envApiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "";
+export const API_BASE_URL = envApiUrl ? envApiUrl.trim().replace(/\/+$/, "") : "";
 
 export async function generateTrip(payload) {
   // First attempt streaming generation
@@ -55,18 +55,25 @@ export async function generateTrip(payload) {
   }
 
   // Resilient non-streaming fallback
-  const fallbackResponse = await fetch(`${API_BASE_URL}/api/trips/generate?stream=false`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  try {
+    const fallbackResponse = await fetch(`${API_BASE_URL}/api/trips/generate?stream=false`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-  if (!fallbackResponse.ok) {
-    const error = await fallbackResponse.json().catch(() => ({}));
-    throw new Error(error.detail || "Unable to generate itinerary. Please try again.");
+    if (!fallbackResponse.ok) {
+      const error = await fallbackResponse.json().catch(() => ({}));
+      throw new Error(error.detail || `Server returned error (${fallbackResponse.status}). Please try again.`);
+    }
+
+    return await fallbackResponse.json();
+  } catch (err) {
+    if (err.name === "TypeError" && (err.message.includes("fetch") || err.message.includes("Failed"))) {
+      throw new Error("Unable to connect to the backend server. Please verify the backend is running on port 8000.");
+    }
+    throw err;
   }
-
-  return await fallbackResponse.json();
 }
 
 export async function fetchTrips(userId) {
@@ -118,4 +125,22 @@ export async function updateFavoriteDestinations(firebaseUid, favoriteDestinatio
     throw new Error(error.detail || "Unable to update favorite destinations.");
   }
   return response.json();
+}
+
+export async function fetchTripById(id) {
+  if (!id || id === "latest") return null;
+  try {
+    const url = new URL(`${API_BASE_URL}/api/itineraries`, window.location.origin);
+    url.searchParams.set("trip_id", id);
+    const response = await fetch(url);
+    if (response.ok) {
+      const list = await response.json();
+      if (Array.isArray(list) && list.length && list[0].ai_response) {
+        return list[0].ai_response;
+      }
+    }
+  } catch {
+    // Graceful fallback to cached or list
+  }
+  return null;
 }

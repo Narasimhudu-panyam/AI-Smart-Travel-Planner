@@ -1,5 +1,4 @@
-const configuredApiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-const API_BASE = import.meta.env.PROD ? "" : (configuredApiBase.startsWith("/") ? "http://localhost:8000" : configuredApiBase.replace(/\/+$/, ""));
+import { API_BASE_URL } from "./api";
 
 // Simple in-memory cache with TTL to reduce API calls during a session
 const _cache = new Map(); // key -> {expires, data}
@@ -20,7 +19,7 @@ async function searchPlaces(destination, pageToken = null) {
     return cached.data;
   }
 
-  const url = new URL(`${API_BASE}/api/places`, window.location.origin);
+  const url = new URL(`${API_BASE_URL}/api/places`, window.location.origin);
   url.searchParams.set("destination", destination.trim());
   if (pageToken) url.searchParams.set("page_token", pageToken);
 

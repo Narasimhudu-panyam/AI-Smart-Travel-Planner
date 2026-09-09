@@ -66,6 +66,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_name, version="1.1.0", lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.exception_handler(DatabaseError)
 async def database_exception_handler(_: Request, exc: DatabaseError) -> JSONResponse:
@@ -240,15 +248,5 @@ async def update_expense(expense_id: str, payload: ExpenseUpdate): return await 
 async def delete_expense(expense_id: str): await repository.delete_expense(expense_id)
 
 
-# Keep CORS outside FastAPI's ServerErrorMiddleware. This ensures an allowed
-# browser origin also receives CORS headers when an unexpected 500 occurs.
-# The FastAPI instance remains exported as ``app`` for uvicorn app.main:app.
-app.middleware_stack = DiagnosticCORSMiddleware(
-    app=app.build_middleware_stack(),
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 logger.info("CORS allowlist configured for: %s", settings.cors_origins)
 logger.info("FastAPI routes loaded: %s", [route.path for route in app.routes])

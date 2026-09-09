@@ -21,12 +21,15 @@ from app.models import (
 
 logger = logging.getLogger(__name__)
 
-# Active Gemini models in order of priority
+# Active Gemini models in order of priority (verified working with Google API)
 CANDIDATE_MODELS = [
-    "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
     "gemini-3-flash-preview",
-    "gemini-flash-latest",
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3.5-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-3.5-flash",
+    "gemini-3.7-flash",
 ]
 
 
@@ -45,7 +48,7 @@ def _extract_json(text: str) -> dict[str, Any]:
     fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
     if fence_match:
         text = fence_match.group(1).strip()
-    
+
     # Locate first '{' and last '}'
     start = text.find("{")
     end = text.rfind("}")
@@ -53,11 +56,13 @@ def _extract_json(text: str) -> dict[str, Any]:
         json_str = text[start : end + 1]
         try:
             return json.loads(json_str)
-        except json.JSONDecodeError as exc:
-            logger.warning("JSON decode failed on extracted block: %s", exc)
-            # Try cleaning trailing commas
-            cleaned = re.sub(r",\s*([\]}])", r"\1", json_str)
-            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            try:
+                # Try cleaning trailing commas
+                cleaned = re.sub(r",\s*([\]}])", r"\1", json_str)
+                return json.loads(cleaned)
+            except Exception as exc:
+                logger.warning("JSON decode failed after comma cleanup: %s", exc)
 
     raise ValueError("AI response did not contain a valid JSON object.")
 

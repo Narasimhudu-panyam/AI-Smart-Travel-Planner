@@ -28,7 +28,7 @@ import {
   Utensils,
   Wallet,
 } from "lucide-react";
-import { fetchTrips, generateTrip, uploadDocument } from "./api";
+import { fetchTripById, fetchTrips, generateTrip, uploadDocument } from "./api";
 import { firebaseEnabled, loginWithEmail, loginWithGoogle, logout, registerWithEmail, subscribeToAuth } from "./firebase";
 import { interestOptions, styleOptions } from "./data";
 import PopularPlaces from "./PopularPlaces";
@@ -527,10 +527,25 @@ function TripDetails({ user }) {
 
   useEffect(() => {
     if (plan) return;
-    fetchTrips(user.uid)
-      .then((items) => setPlan(items.find((x) => String(x.id) === id)?.plan || JSON.parse(localStorage.getItem("latest-plan") || "null")))
-      .catch(() => setPlan(JSON.parse(localStorage.getItem("latest-plan") || "null")));
-  }, [id, user.uid, plan]);
+    fetchTrips(user?.uid)
+      .then(async (items) => {
+        const found = items.find((x) => String(x.id) === id)?.plan;
+        if (found) {
+          setPlan(found);
+        } else {
+          const direct = await fetchTripById(id);
+          if (direct) {
+            setPlan(direct);
+          } else {
+            setPlan(JSON.parse(localStorage.getItem("latest-plan") || "null"));
+          }
+        }
+      })
+      .catch(async () => {
+        const direct = await fetchTripById(id).catch(() => null);
+        setPlan(direct || JSON.parse(localStorage.getItem("latest-plan") || "null"));
+      });
+  }, [id, user?.uid, plan]);
 
   if (!plan) return <main className="app-page"><EmptyTrips /></main>;
 

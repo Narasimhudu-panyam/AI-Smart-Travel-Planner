@@ -7,9 +7,10 @@ class Settings(BaseSettings):
     app_name: str = "AI Smart Travel Planner"
     app_env: str = "development"
     # Comma-separated, explicit browser origins permitted to call the API.
-    # Set this to the Vercel production URL in Render, for example:
-    # FRONTEND_ORIGIN=https://travel-planner.vercel.app
+    # Set this to the Vercel production URL in Render/FastAPI hosting, for example:
+    # FRONTEND_URL=https://travel-planner.vercel.app or FRONTEND_ORIGIN=https://travel-planner.vercel.app
     frontend_origin: str = ""
+    frontend_url: str = ""
 
     ai_provider: str = "gemini"
     gemini_api_key: str | None = None
@@ -28,14 +29,19 @@ class Settings(BaseSettings):
     cloudinary_api_key: str | None = None
     cloudinary_api_secret: str | None = None
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=(".env", "backend/.env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     @property
     def cors_origins(self) -> list[str]:
         """Return the configured production origins plus supported local origins."""
+        raw_origins = f"{self.frontend_url},{self.frontend_origin}"
         configured_origins = [
             origin.strip().rstrip("/")
-            for origin in self.frontend_origin.split(",")
+            for origin in raw_origins.split(",")
             if origin.strip()
         ]
         local_origins = [
@@ -43,6 +49,8 @@ class Settings(BaseSettings):
             "http://127.0.0.1:5173",
             "http://localhost:3000",
             "http://127.0.0.1:3000",
+            "http://localhost:4173",
+            "http://127.0.0.1:4173",
         ]
         return list(dict.fromkeys([*configured_origins, *local_origins]))
 

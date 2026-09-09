@@ -7,7 +7,7 @@ async def get_weather(destination: str, settings: Settings) -> dict[str, str | f
     if not settings.openweather_api_key:
         return {
             "source": "demo",
-            "description": "Weather preview unavailable until OpenWeather API is configured.",
+            "description": "Weather information is currently unavailable.",
             "temperature_c": None,
         }
 
@@ -22,10 +22,10 @@ async def get_weather(destination: str, settings: Settings) -> dict[str, str | f
             response = await client.get("https://api.openweathermap.org/data/2.5/weather", params=params)
             response.raise_for_status()
             data = response.json()
-    except httpx.HTTPError:
+    except Exception:
         return {
             "source": "demo",
-            "description": "Weather service unavailable; using planning fallback.",
+            "description": "Weather information is currently unavailable.",
             "temperature_c": None,
         }
 
