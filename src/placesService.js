@@ -1,4 +1,5 @@
-import { API_BASE_URL } from "./api";
+const configuredApiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.PROD ? "" : (configuredApiBase.startsWith("/") ? "http://localhost:8000" : configuredApiBase.replace(/\/+$/, ""));
 
 // Simple in-memory cache with TTL to reduce API calls during a session
 const _cache = new Map(); // key -> {expires, data}
@@ -19,22 +20,21 @@ async function searchPlaces(destination, pageToken = null) {
     return cached.data;
   }
 
-  const url = new URL(`${API_BASE_URL}/api/places`, window.location.origin);
-  url.searchParams.set("destination", destination.trim());
+  const url = new URL(`${API_BASE}/api/places`, window.location.origin);
+  url.searchParams.set("destination", destination);
   if (pageToken) url.searchParams.set("page_token", pageToken);
 
   try {
     const res = await fetch(url.toString());
     if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      const msg = errorData.detail || `Server returned HTTP ${res.status}`;
-      return { places: [], next_page_token: null, source: "unavailable", message: msg };
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || "Unable to load popular places.");
     }
     const data = await res.json();
     _cache.set(key, { expires: Date.now() + TTL_MS, data });
     return data;
-  } catch (err) {
-    return { places: [], next_page_token: null, source: "error", message: err.message || "Network error loading places." };
+  } catch {
+    return { places: [], next_page_token: null, source: "error" };
   }
 }
 

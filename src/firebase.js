@@ -50,7 +50,8 @@ if (missingFirebaseConfig.length) {
   }
 }
 
-import { API_BASE_URL } from "./api";
+const configuredApiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_BASE_URL = import.meta.env.PROD ? "" : (configuredApiBase.startsWith("/") ? "http://localhost:8000" : configuredApiBase.replace(/\/+$/, ""));
 
 async function synchronizeUser(user) {
   const response = await fetch(`${API_BASE_URL}/api/users`, {
